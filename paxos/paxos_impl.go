@@ -1,6 +1,7 @@
 package paxos
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -88,7 +89,7 @@ func (px *Paxos) Start(seq int, v interface{}) {
 
 	//if start is called with a sequence number less than min, this call should be ignored
 	if !(seq < px.Min()) {
-		//Printf("[%d]: sequence being proposed\n", px.me)
+		fmt.Printf("[%d, start]: sequence being proposed with value %d \n", px.me, v)
 		go px.Propose(seq, v)
 	}
 
@@ -118,7 +119,7 @@ infinite for loop that only breaks if sequence is decided
 */
 func (px *Paxos) Propose(seq int, v interface{}) {
 
-	//Printf("[%d]: sequence number: %d\n", px.me, seq)
+	fmt.Printf("[%d, propose]: sequence number: %d and value %d\n", px.me, seq, v)
 
 	//first check if instance exists locally
 	_, exists := px.impl.instances[seq]
@@ -142,10 +143,6 @@ func (px *Paxos) Propose(seq int, v interface{}) {
 	// easy access to this instance
 	thisInstance := px.impl.instances[seq]
 
-	if thisInstance.Decided {
-		return
-	}
-
 	// choose n, unique and higher than any n seen so far
 	n := int(common.Nrand())
 	for n <= thisInstance.np {
@@ -155,46 +152,49 @@ func (px *Paxos) Propose(seq int, v interface{}) {
 	for !thisInstance.Decided {
 
 		// PART 2
-
+		if thisInstance.va != nil {
+			v = thisInstance.va
+		}
 		px.sendPrepare(seq, n, v)
 
 		// PART 3/4
 		if thisInstance.PrepareOK {
-			//Printf("[%d]: proposal ok\n", px.me)
-			// PART 5
-			//TODO double check v prime logic
-			var vPrime interface{}
 
-			//if this instance.va has a higher n_a than n, then vPrime = thisInstance.va
+			// PART 5
+			var vPrime interface{}
+			var nPrime int
+
+			//if thisInstance.va has a higher n_a than n, then vPrime = thisInstance.va
 			//else vPrime = v
-			if thisInstance.na > n {
+			if thisInstance.na >= n {
 				vPrime = thisInstance.va
+				nPrime = thisInstance.na
 			} else {
 				vPrime = v
+				nPrime = n
 			}
 
-			px.sendAccept(seq, n, vPrime)
+			fmt.Printf("[%d, propose]: prepare ok on seq %d with N %d and value %d\n", px.me, seq, n, vPrime)
+
+			px.sendAccept(seq, nPrime, vPrime)
 
 			// PART 6
 			if thisInstance.AcceptOK {
+				fmt.Printf("[%d, propose]: do we get into the decide phase? acceptOK is %d \n", px.me, thisInstance.AcceptOKCount)
 				thisInstance.va = vPrime
 
 				// PART 7
-				px.sendDecide(seq, n, vPrime)
+				px.sendDecide(seq, nPrime, vPrime)
 
 				if thisInstance.DecideOKCount >= px.impl.majority {
 					thisInstance.Decided = true
 					thisInstance.va = vPrime
 				}
 			}
-		} else {
-			//Printf("[%d]: failed\n", px.me)
-			// duration := 5 * time.Minute
-			// time.Sleep(duration)
-			continue
 		}
 
 		//increment n for every new proposal attempt
+		//if we came across an na higher than our n, we wanna push it higher
 		n = thisInstance.np + 1
 
 	} // END OF FOR LOOP
@@ -209,7 +209,7 @@ func (px *Paxos) Done(seq int) {
 	px.mu.Lock()
 	defer px.mu.Unlock()
 
-	//Printf("[%d]: done called sequence %d\n", px.me, seq)
+	fmt.Printf("[%d, done]: done broadcast called sequence %d\n", px.me, seq)
 
 	args := &BroadcastArgs{
 		Replica: px.me,
