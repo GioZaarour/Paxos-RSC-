@@ -1,5 +1,4 @@
 # Paxos-based RSM Key-Value Store
-# Paxos-based RSM Key-Value Store
 
 *This project is an excerpt from my Distributed Systems Course at USC. The implementation is my own work and is not perfect or devoid of bugs.* 
 
