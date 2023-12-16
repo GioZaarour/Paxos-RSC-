@@ -6,7 +6,7 @@
 
 ## Diagram
 
-![Paxos KV Store](https://github.com/giozaarour/Paxos-RSM/blob/master/DIAGRAM.png?raw=true)
+![Paxos KV Store](https://github.com/giozaarour/Paxos-RSM/blob/master/common/DIAGRAM.png?raw=true)
 
 ## Usage
 
