@@ -1,7 +1,7 @@
 package kvpaxos
 
 import (
-	"fmt"
+
 	// "net/rpc"
 	"time"
 
@@ -12,186 +12,139 @@ import (
 // Field names must start with capital letters,
 // otherwise RPC will break.
 type Op struct {
-	Type  string
-	Key   string
-	Value string
-	ID    int64
-	Seq   int
+	Key       string
+	Value     string
+	Operation string
+	ClientID  int64
+	Seq       int
 }
 
 // additions to KVPaxos state
 type KVPaxosImpl struct {
-	kvMap             map[string]string
-	operationsApplied map[int64]bool
-	seq               int
-	seqCache          map[int64]int
-	//px                *paxos.Paxos
+	lastApply    int
+	KVMap        map[string]string
+	lastApplyLog Op
+	maxClientSeq map[int64]int
 }
 
 // initialize kv.impl.*
 func (kv *KVPaxos) InitImpl() {
 	kv.impl = KVPaxosImpl{
-		operationsApplied: make(map[int64]bool),
-		seqCache:          make(map[int64]int),
-		seq:               0,
-		kvMap:             make(map[string]string),
+		KVMap:        make(map[string]string),
+		maxClientSeq: make(map[int64]int),
+		lastApply:    -1,
 	}
 	// fmt.Println("peers: ", kv.impl.peers)
 
 }
 
-// Handler for Get RPCs
 func (kv *KVPaxos) Get(args *GetArgs, reply *GetReply) error {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
 
-	// Check if duplicate
-	_, doneBefore := kv.impl.operationsApplied[args.Impl.ID]
-	if doneBefore {
-		reply.Value = kv.impl.kvMap[args.Key]
+	DPrintf("Get key %s", args.Key)
+
+	v := Op{Key: args.Key, Operation: "Get", ClientID: args.Impl.ClientID, Seq: args.Impl.Seq}
+	clientID := args.Impl.ClientID
+	if maxSeq, ok := kv.impl.maxClientSeq[clientID]; ok && args.Impl.Seq <= maxSeq {
 		reply.Err = OK
+		reply.Value = kv.impl.KVMap[v.Key]
 		return nil
 	}
-
-	// Not a duplicate
-	op := Op{
-		Type: "Get",
-		Key:  args.Key,
-		ID:   args.Impl.ID,
-	}
-
-	// add seq num to cache
-	seq := kv.incrementSeq()
-	op.Seq = seq
-	kv.addSeqToCache(args.Impl.ID, args.Impl.Seq)
-
-	kv.rsm.AddOp(op.Seq)
-
-	// Wait for Paxos consensus
+	seq := kv.impl.lastApply + 1
 	for {
-		fmt.Printf("[%d, get]: waiting for paxos consensus\n", kv.me)
-		status, _ := kv.rsm.Status(op.Seq)
-		if kv.rsm.StatusString(status) == "Decided" {
+		kv.rsm.Start(seq, v)
+		decidedValue := kv.Wait(seq)
+		if v == decidedValue {
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		seq++
+	}
+	for ; kv.impl.lastApply+1 < seq; kv.impl.lastApply++ {
+		decidedValue := kv.Wait(kv.impl.lastApply + 1)
+		kv.ApplyOp(decidedValue.(Op))
 	}
 
-	fmt.Printf("[%d, get]: paxos consensus reached\n", kv.me)
-	decidedValue := kv.waitForDecision(int(op.ID))
-
-	opDecided := decidedValue.(Op)
-
-	kv.ApplyOp(opDecided)
-
+	reply.Value = kv.impl.KVMap[args.Key]
+	reply.Err = OK
+	kv.rsm.Done(kv.impl.lastApply)
+	//log.Printf("Reply %v", reply)
 	return nil
 }
 
-// Handler for Put and Append RPCs
 func (kv *KVPaxos) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
 
-	op := Op{
-		Type:  args.Op,
-		Key:   args.Key,
-		Value: args.Value,
-		ID:    args.Impl.ID,
-		Seq:   args.Impl.Seq,
-	}
+	DPrintf("PutAppend key %s, value %s, op %s", args.Key, args.Value, args.Op)
 
-	fmt.Println("op: ", op.Type)
-	fmt.Println("key: ", op.Key)
-	fmt.Println("value: ", op.Value)
-
-	kv.rsm.AddOp(op.Seq)
-
-	// check for duplicate, dont process duplicates
-	if kv.impl.operationsApplied[args.Impl.ID] {
-		reply.Err = paxos.OK
+	v := Op{Key: args.Key, Operation: args.Op, Value: args.Value, ClientID: args.Impl.ClientID, Seq: args.Impl.Seq}
+	clientID := args.Impl.ClientID
+	if maxSeq, ok := kv.impl.maxClientSeq[clientID]; ok && args.Impl.Seq <= maxSeq {
+		// if isApply, ok := kv.isLogApply[v]; ok && isApply {
+		reply.Err = OK
 		return nil
 	}
-
-	kv.addSeqToCache(args.Impl.ID, args.Impl.Seq)
-
-	// wait for paxos consensus
+	seq := kv.impl.lastApply + 1
 	for {
-		fmt.Printf("[%d, putAppend]: waiting for paxos consensus\n", kv.me)
-		status, _ := kv.rsm.Status(op.Seq)
-		if kv.rsm.StatusString(status) == "Decided" {
+		kv.rsm.Start(seq, v)
+		decidedValue := kv.Wait(seq)
+		DPrintf("PutAppend decidedValue %v", decidedValue)
+		if v == decidedValue {
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		seq++
 	}
-
-	fmt.Printf("[%d, putAppend]: paxos consensus reached\n", kv.me)
-	decidedValue := kv.waitForDecision(int(op.ID))
-
-	opDecided := decidedValue.(Op)
-
-	kv.rsm.AddOp(opDecided)
-
-	// check if val exists
-	if _, exists := kv.impl.kvMap[args.Key]; exists {
-		reply.Err = paxos.OK
-	} else {
-		reply.Err = "error"
-	}
+	reply.Err = OK
 	return nil
-
 }
 
-func (kv *KVPaxos) waitForDecision(seq int) interface{} {
+func (kv *KVPaxos) Wait(seq int) interface{} {
+	sleepTime := 10 * time.Microsecond
 	for {
-		fmt.Printf("[%d, waitForDecision]: waiting for paxos decision\n", kv.me)
-		status, decidedValue := kv.rsm.Status(seq)
-		if status == paxos.Decided {
+		decided, decidedValue := kv.rsm.Status(seq)
+		if decided == paxos.Decided {
 			return decidedValue
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-// Execute operation encoded in decided value v and update local state
-func (kv *KVPaxos) ApplyOp(v interface{}) {
-	operation, ok := v.(Op)
-
-	if !ok {
-		return
-	}
-
-	// check again for duplicate
-	if kv.impl.operationsApplied[operation.ID] {
-		return
-	}
-
-	// apply operation
-	curr, exists := kv.impl.kvMap[operation.Key]
-	switch operation.Type {
-	case "Put":
-		kv.impl.kvMap[operation.Key] = operation.Value
-	case "Append":
-		if exists {
-			kv.impl.kvMap[operation.Key] = curr + operation.Value
-		} else {
-			kv.impl.kvMap[operation.Key] = operation.Value
+		if decided == paxos.Forgotten {
+			break
 		}
-
-		// op has been applied
-		kv.impl.operationsApplied[operation.ID] = true
-
+		time.Sleep(sleepTime)
+		if sleepTime < 10*time.Second {
+			sleepTime *= 2
+		}
 	}
-
+	return nil
 }
 
-func (kv *KVPaxos) incrementSeq() int {
-	kv.mu.Lock()
-	defer kv.mu.Unlock()
-
-	kv.impl.seq++
-	return kv.impl.seq
+func (kv *KVPaxos) ApplyOp(op Op) interface{} {
+	if op.Operation == "Get" {
+		return kv.impl.KVMap[op.Key]
+	} else if op.Operation == "Put" {
+		kv.impl.KVMap[op.Key] = op.Value
+	} else {
+		value, ok := kv.impl.KVMap[op.Key]
+		if !ok {
+			value = ""
+		}
+		kv.impl.KVMap[op.Key] = value + op.Value
+	}
+	if maxSeq, ok := kv.impl.maxClientSeq[op.ClientID]; !ok || maxSeq < op.Seq {
+		kv.impl.maxClientSeq[op.ClientID] = op.Seq
+	}
+	// kv.impl.lastApplyLog = op
+	// kv.isLogApply[op] = true
+	return nil
 }
 
-func (kv *KVPaxos) addSeqToCache(id int64, seq int) {
-	kv.impl.seqCache[id] = seq
-}
+// func (kv *KVPaxos) incrementSeq() int {
+// 	kv.mu.Lock()
+// 	defer kv.mu.Unlock()
+
+// 	kv.impl.seq++
+// 	return kv.impl.seq
+// }
+
+// func (kv *KVPaxos) addSeqToCache(id int64, seq int) {
+// 	kv.impl.seqCache[id] = seq
+// }

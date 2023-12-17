@@ -35,7 +35,6 @@ type KVPaxos struct {
 	impl       KVPaxosImpl
 }
 
-
 // tell the server to shut itself down.
 func (kv *KVPaxos) kill() {
 	DPrintf("Kill(%d): die\n", kv.me)
@@ -61,12 +60,10 @@ func (kv *KVPaxos) isunreliable() bool {
 	return atomic.LoadInt32(&kv.unreliable) != 0
 }
 
-//
 // servers[] contains the ports of the set of
 // servers that will cooperate via Paxos to
 // form the fault-tolerant key/value service.
 // me is the index of the current server in servers[].
-//
 func StartServer(servers []string, me int) *KVPaxos {
 	// call gob.Register on structures you want
 	// Go's RPC library to marshall/unmarshall.
