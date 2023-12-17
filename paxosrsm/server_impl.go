@@ -28,25 +28,29 @@ func (rsm *PaxosRSM) InitRSMImpl() {
 	}
 }
 
-
 func (rsm *PaxosRSM) Start(seq int, v interface{}) {
-    rsm.px.Start(seq, v)
+	rsm.px.Start(seq, v)
 }
 
 func (rsm *PaxosRSM) Status(seq int) (paxos.Fate, interface{}) {
-    return rsm.px.Status(seq)
+	return rsm.px.Status(seq)
+}
+
+// statusstring
+func (rsm *PaxosRSM) StatusString(fate paxos.Fate) string {
+	return rsm.px.StatusString(fate)
 }
 
 func (rsm *PaxosRSM) Done(seq int) {
-    rsm.px.Done(seq)
+	rsm.px.Done(seq)
 }
 
 func (rsm *PaxosRSM) Min() int {
-    return rsm.px.Min()
+	return rsm.px.Min()
 }
 
 func (rsm *PaxosRSM) Max() int {
-    return rsm.px.Max()
+	return rsm.px.Max()
 }
 
 //
@@ -85,13 +89,8 @@ func (rsm *PaxosRSM) handleConflict(v interface{}, seq int) interface{} {
 	// wait to reach consensus
 	to := 10 * time.Millisecond
 
-<<<<<<< HEAD
 	fate, decidedValue := rsm.px.Status(seq)
 	if rsm.px.StatusString(fate) == "Decided" {
-=======
-	fate, decidedValue := rsm.Status(seq)
-	if fate == paxos.Decided {
->>>>>>> 7f3342fe3b401929da129a4f8dc5bd5826624e8e
 		rsm.applyOp(decidedValue)
 
 		// The sequence number is no longer in use

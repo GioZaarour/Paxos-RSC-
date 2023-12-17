@@ -16,28 +16,25 @@ type Op struct {
 	Key   string
 	Value string
 	ID    int64
-	Seq int
+	Seq   int
 }
 
 // additions to KVPaxos state
 type KVPaxosImpl struct {
 	kvMap             map[string]string
 	operationsApplied map[int64]bool
-<<<<<<< HEAD
-	px                *paxos.Paxos
-=======
-	seq int
-	seqCache map[int64]int 
-	// px *paxos.Paxos 
->>>>>>> 7f3342fe3b401929da129a4f8dc5bd5826624e8e
+	seq               int
+	seqCache          map[int64]int
+	//px                *paxos.Paxos
 }
 
 // initialize kv.impl.*
 func (kv *KVPaxos) InitImpl() {
 	kv.impl = KVPaxosImpl{
 		operationsApplied: make(map[int64]bool),
-		seqCache: make(map[int64]int),
-		seq: 0,
+		seqCache:          make(map[int64]int),
+		seq:               0,
+		kvMap:             make(map[string]string),
 	}
 	// fmt.Println("peers: ", kv.impl.peers)
 
@@ -65,28 +62,27 @@ func (kv *KVPaxos) Get(args *GetArgs, reply *GetReply) error {
 
 	// add seq num to cache
 	seq := kv.incrementSeq()
-	op.Seq = seq 
+	op.Seq = seq
 	kv.addSeqToCache(args.Impl.ID, args.Impl.Seq)
 
 	kv.rsm.AddOp(op.Seq)
 
 	// Wait for Paxos consensus
 	for {
-<<<<<<< HEAD
-		status, _ := kv.impl.px.Status(index)
-		if kv.impl.px.StatusString(status) == "Decided" {
-=======
+		fmt.Printf("[%d, get]: waiting for paxos consensus\n", kv.me)
 		status, _ := kv.rsm.Status(op.Seq)
-		if status == paxos.Decided {
->>>>>>> 7f3342fe3b401929da129a4f8dc5bd5826624e8e
+		if kv.rsm.StatusString(status) == "Decided" {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	decidedOp := kv.waitForDecision(int(op.ID))
+	fmt.Printf("[%d, get]: paxos consensus reached\n", kv.me)
+	decidedValue := kv.waitForDecision(int(op.ID))
 
-	kv.ApplyOp(decidedOp)
+	opDecided := decidedValue.(Op)
+
+	kv.ApplyOp(opDecided)
 
 	return nil
 }
@@ -97,11 +93,11 @@ func (kv *KVPaxos) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error {
 	defer kv.mu.Unlock()
 
 	op := Op{
-		Type: args.Op,
-		Key:  args.Key,
+		Type:  args.Op,
+		Key:   args.Key,
 		Value: args.Value,
-		ID:   args.Impl.ID,
-		Seq: args.Impl.Seq,
+		ID:    args.Impl.ID,
+		Seq:   args.Impl.Seq,
 	}
 
 	fmt.Println("op: ", op.Type)
@@ -120,43 +116,37 @@ func (kv *KVPaxos) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error {
 
 	// wait for paxos consensus
 	for {
-<<<<<<< HEAD
-		status, _ := kv.px.Status(index)
-		if kv.impl.px.StatusString(status) == "Decided" {
-=======
-		// fmt.Println("peers: ", kv.impl.peers)
-
-		status, _ := kv.rsm.Status(args.Impl.Seq)
-		if status == paxos.Decided {
->>>>>>> 7f3342fe3b401929da129a4f8dc5bd5826624e8e
+		fmt.Printf("[%d, putAppend]: waiting for paxos consensus\n", kv.me)
+		status, _ := kv.rsm.Status(op.Seq)
+		if kv.rsm.StatusString(status) == "Decided" {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	decidedOp := kv.waitForDecision(int(op.ID))
-	kv.rsm.AddOp(decidedOp)
+	fmt.Printf("[%d, putAppend]: paxos consensus reached\n", kv.me)
+	decidedValue := kv.waitForDecision(int(op.ID))
 
-// check if val exists
+	opDecided := decidedValue.(Op)
+
+	kv.rsm.AddOp(opDecided)
+
+	// check if val exists
 	if _, exists := kv.impl.kvMap[args.Key]; exists {
 		reply.Err = paxos.OK
 	} else {
 		reply.Err = "error"
 	}
-	return nil 
+	return nil
 
 }
 
-func (kv *KVPaxos) waitForDecision(index int) Op {
+func (kv *KVPaxos) waitForDecision(seq int) interface{} {
 	for {
-<<<<<<< HEAD
-		status, decidedValue := kv.impl.px.Status(index)
-		if kv.impl.px.StatusString(status) == "Decided" {
-=======
-		status, decidedValue := kv.rsm.Status(index)
+		fmt.Printf("[%d, waitForDecision]: waiting for paxos decision\n", kv.me)
+		status, decidedValue := kv.rsm.Status(seq)
 		if status == paxos.Decided {
->>>>>>> 7f3342fe3b401929da129a4f8dc5bd5826624e8e
-			return decidedValue.(Op)
+			return decidedValue
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -171,11 +161,7 @@ func (kv *KVPaxos) ApplyOp(v interface{}) {
 	}
 
 	// check again for duplicate
-<<<<<<< HEAD
-	if kv.impl.operationsApplied(operation.ID) {
-=======
-	if _, exists := kv.impl.operationsApplied[operation.ID]; exists {
->>>>>>> 7f3342fe3b401929da129a4f8dc5bd5826624e8e
+	if kv.impl.operationsApplied[operation.ID] {
 		return
 	}
 
@@ -205,7 +191,6 @@ func (kv *KVPaxos) incrementSeq() int {
 	kv.impl.seq++
 	return kv.impl.seq
 }
-
 
 func (kv *KVPaxos) addSeqToCache(id int64, seq int) {
 	kv.impl.seqCache[id] = seq

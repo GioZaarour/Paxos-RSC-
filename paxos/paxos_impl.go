@@ -296,12 +296,12 @@ func (px *Paxos) Min() int {
 // should just inspect the local peer state;
 // it should not contact other Paxos peers.
 func (px *Paxos) Status(seq int) (Fate, interface{}) {
-	if seq < px.Min() {
-		return Forgotten, nil
-	}
 	instance, exists := px.impl.instances[seq]
 	if !exists {
 		return Pending, nil
+	}
+	if seq < px.Min() {
+		return Forgotten, nil
 	}
 	if instance.Decided {
 		return Decided, instance.va
