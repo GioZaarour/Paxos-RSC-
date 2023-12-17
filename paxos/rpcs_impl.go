@@ -1,11 +1,6 @@
 package paxos
 
 import (
-
-	// "time"
-	// "strconv"
-	"fmt"
-
 	"usc.edu/csci499/proj3/common"
 )
 
@@ -82,9 +77,9 @@ func (px *Paxos) sendPrepare(seq int, n int, v interface{}) error {
 	// thisInstance.PrepareOK = false
 	// thisInstance.PrepareOKCount = 0
 
-	fmt.Printf("[%d, sendPrepare]: sequence %d with value %d \n", px.me, seq, v)
+	//fmt.Printf("[%d, sendPrepare]: sequence %d with value %d \n", px.me, seq, v)
 
-	fmt.Printf("[%d, sendPrepare]: peer list %v\n", px.me, px.peers)
+	//fmt.Printf("[%d, sendPrepare]: peer list %v\n", px.me, px.peers)
 
 	//for every peer, send prepare RPC
 	for _, peer := range px.peers {
@@ -144,7 +139,7 @@ func (px *Paxos) sendPrepare(seq int, n int, v interface{}) error {
 	} // END FOR
 
 	if okCount >= px.impl.majority {
-		fmt.Printf("[%d, sendPrepare]: majority of prepares accepted\n", px.me)
+		//fmt.Printf("[%d, sendPrepare]: majority of prepares accepted\n", px.me)
 		thisInstance.PrepareOKCount = okCount
 		thisInstance.PrepareOK = true
 	}
@@ -214,7 +209,7 @@ func (px *Paxos) Prepare(args *PrepareArgs, reply *PrepareReply) error {
 
 	//if n > n_p
 	//print n and n_p
-	fmt.Printf("[%d, prepare]: prepare called sequence %d N %d and NP %d \n", px.me, args.Sequence, args.N, thisInstance.np)
+	//fmt.Printf("[%d, prepare]: prepare called sequence %d N %d and NP %d \n", px.me, args.Sequence, args.N, thisInstance.np)
 	if args.N >= thisInstance.np {
 
 		//n_p = n
@@ -224,10 +219,10 @@ func (px *Paxos) Prepare(args *PrepareArgs, reply *PrepareReply) error {
 		reply.HighestAcceptedProposalID = thisInstance.na
 		reply.AcceptedValue = thisInstance.va
 		reply.Err = OK
-		fmt.Printf("[%d, prepare]: prepare accepted\n", px.me)
+		//fmt.Printf("[%d, prepare]: prepare accepted\n", px.me)
 	} else {
 		//reply prepare_reject
-		fmt.Printf("[%d, prepare]: prepare rejected\n", px.me)
+		//fmt.Printf("[%d, prepare]: prepare rejected\n", px.me)
 		reply.Prepared = false
 	}
 
@@ -319,7 +314,7 @@ func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) error {
 	px.mu.Lock()
 	defer px.mu.Unlock()
 
-	fmt.Printf("[%d, accept]: accept called sequence %d N %d and value %d\n", px.me, args.Sequence, args.N, args.Value)
+	//fmt.Printf("[%d, accept]: accept called sequence %d N %d and value %d\n", px.me, args.Sequence, args.N, args.Value)
 
 	//first check if instance exists
 	_, exists := px.impl.instances[args.Sequence]
@@ -344,7 +339,7 @@ func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) error {
 	thisInstance := px.impl.instances[args.Sequence]
 
 	if thisInstance.Decided {
-		fmt.Printf("[%d, accept]: accept already decided with value %d \n", px.me, thisInstance.va)
+		//fmt.Printf("[%d, accept]: accept already decided with value %d \n", px.me, thisInstance.va)
 		reply.Accepted = false
 		reply.Err = "Instance decided"
 		reply.AcceptedValue = thisInstance.va
@@ -360,10 +355,10 @@ func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) error {
 		reply.Accepted = true
 		reply.HighestAcceptedProposalID = args.N
 		reply.Err = OK
-		fmt.Printf("[%d, accept]: accept accepted with value %d \n", px.me, thisInstance.va)
+		//fmt.Printf("[%d, accept]: accept accepted with value %d \n", px.me, thisInstance.va)
 
 	} else {
-		fmt.Printf("[%d, accept]: accept rejected\n", px.me)
+		//fmt.Printf("[%d, accept]: accept rejected\n", px.me)
 		// duration := 5 * time.Minute
 		// time.Sleep(duration)
 		reply.Accepted = false
@@ -444,17 +439,17 @@ func (px *Paxos) Decide(args *DecidedArgs, reply *DecidedReply) error {
 	thisInstance := px.impl.instances[args.Sequence]
 
 	// print the instances map
-	fmt.Printf("[%d, decide]: instances map: %v\n", px.me, px.impl.instances)
-	fmt.Printf("[%d, decide]: args.Sequence: %v\n", px.me, args.Sequence)
+	//fmt.Printf("[%d, decide]: instances map: %v\n", px.me, px.impl.instances)
+	//fmt.Printf("[%d, decide]: args.Sequence: %v\n", px.me, args.Sequence)
 
 	thisInstance.Decided = true
 	thisInstance.va = args.Value
 
 	reply.Err = OK
 
-	fmt.Printf("[%d, decide]: Decide called\n", px.me)
-	fmt.Printf("[%d, decide]: Decided: %v\n", px.me, thisInstance.Decided)
-	fmt.Printf("[%d, decide]: va: %v\n", px.me, thisInstance.va)
+	//fmt.Printf("[%d, decide]: Decide called\n", px.me)
+	//fmt.Printf("[%d, decide]: Decided: %v\n", px.me, thisInstance.Decided)
+	//fmt.Printf("[%d, decide]: va: %v\n", px.me, thisInstance.va)
 	return nil
 }
 

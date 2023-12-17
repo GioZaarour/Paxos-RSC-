@@ -1,7 +1,6 @@
 package paxos
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -89,7 +88,7 @@ func (px *Paxos) Start(seq int, v interface{}) {
 
 	//if start is called with a sequence number less than min, this call should be ignored
 	if !(seq < px.Min()) {
-		fmt.Printf("[%d, start]: sequence being proposed with value %d \n", px.me, v)
+		//fmt.Printf("[%d, start]: sequence being proposed with value %d \n", px.me, v)
 		go px.Propose(seq, v)
 	}
 
@@ -119,7 +118,7 @@ infinite for loop that only breaks if sequence is decided
 */
 func (px *Paxos) Propose(seq int, v interface{}) {
 
-	fmt.Printf("[%d, propose]: sequence number: %d and value %d\n", px.me, seq, v)
+	//fmt.Printf("[%d, propose]: sequence number: %d and value %d\n", px.me, seq, v)
 
 	//first check if instance exists locally
 	_, exists := px.impl.instances[seq]
@@ -174,13 +173,13 @@ func (px *Paxos) Propose(seq int, v interface{}) {
 				nPrime = n
 			}
 
-			fmt.Printf("[%d, propose]: prepare ok on seq %d with N %d and value %d\n", px.me, seq, n, vPrime)
+			//fmt.Printf("[%d, propose]: prepare ok on seq %d with N %d and value %d\n", px.me, seq, n, vPrime)
 
 			px.sendAccept(seq, nPrime, vPrime)
 
 			// PART 6
 			if thisInstance.AcceptOK {
-				fmt.Printf("[%d, propose]: do we get into the decide phase? acceptOK is %d \n", px.me, thisInstance.AcceptOKCount)
+				//fmt.Printf("[%d, propose]: do we get into the decide phase? acceptOK is %d \n", px.me, thisInstance.AcceptOKCount)
 				thisInstance.va = vPrime
 
 				// PART 7
@@ -209,7 +208,7 @@ func (px *Paxos) Done(seq int) {
 	px.mu.Lock()
 	defer px.mu.Unlock()
 
-	fmt.Printf("[%d, done]: done broadcast called sequence %d\n", px.me, seq)
+	//fmt.Printf("[%d, done]: done broadcast called sequence %d\n", px.me, seq)
 
 	args := &BroadcastArgs{
 		Replica: px.me,

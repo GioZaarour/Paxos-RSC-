@@ -1,2 +1,4 @@
 tests not passing:
 TestLots -> sometimes passes sometimes fails. gonna leave this one
+
+sometimes non-deterministically getting race conditions (concurrent map read and write)
