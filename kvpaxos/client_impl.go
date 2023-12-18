@@ -1,90 +1,79 @@
 package kvpaxos
 
 import (
-	"fmt"
+	"sync"
 
 	"usc.edu/csci499/proj3/common"
 	// "usc.edu/csci499/proj3/paxos"
-	"time"
 )
 
-//
 // any additions to Clerk state
-//
 type ClerkImpl struct {
+	mu       sync.Mutex
 	clientID int64
-	opID int64
-	Key string
-	Value string 
+	seq      int
 }
 
-//
 // initialize ck.impl state
-//
 func (ck *Clerk) InitImpl() {
-	ck.impl = ClerkImpl {
+	ck.impl = ClerkImpl{
 		clientID: common.Nrand(),
-		opID: 0,
-		Key: "",
 	}
 }
 
-//
 // fetch the current value for a key.
 // returns "" if the key does not exist.
 // keeps trying forever in the face of all other errors.
-//
 func (ck *Clerk) Get(key string) string {
-	args := GetArgs {
-		Key: key, 
-		Impl: GetArgsImpl{ 
-            ID: ck.impl.createOpID(),
-        },
+	ck.impl.mu.Lock()
+	defer ck.impl.mu.Unlock()
+	ck.impl.seq++
+	args := &GetArgs{
+		Key: key,
+		Impl: GetArgsImpl{
+			ID:  ck.impl.clientID,
+			Seq: ck.impl.seq,
+		},
 	}
+	reply := GetReply{}
+	idx := 0
 	for {
-		args.Impl.ID = ck.impl.createOpID()
-		args.Key = ck.impl.Key
-
-		for _, srv := range ck.servers {
-			var reply GetReply
-			ok := common.Call(srv, "KVPaxos.Get", &args, &reply)
-			if ok && reply.Err == OK {
-				return reply.Value
-			}
+		ok := common.Call(ck.servers[idx], "KVPaxos.Get", args, &reply)
+		if ok && reply.Err == OK {
+			break
 		}
-		time.Sleep(100*time.Millisecond)
 	}
+	return reply.Value
 }
 
-//
-// shared by Put and Append; op is either "Put" or "Append"
-//
+// shared by Put and Append.
 func (ck *Clerk) PutAppend(key string, value string, op string) {
-	args := PutAppendArgs{
+	ck.impl.mu.Lock()
+	defer ck.impl.mu.Unlock()
+	ck.impl.seq++
+
+	args := &PutAppendArgs{
 		Key:   key,
 		Value: value,
 		Op:    op,
+		Impl: PutAppendArgsImpl{
+			ID:  ck.impl.clientID,
+			Seq: ck.impl.seq,
+		},
 	}
 
-	fmt.Println("client key: ", args.Key)
-	fmt.Println("client value: ", args.Value)
-
+	reply := PutAppendReply{}
+	idx := 0
 	for {
-		args.Impl.ID = ck.impl.createOpID()
-		fmt.Println("client key: ", args.Key)
-
-		for _, srv := range ck.servers {
-			var reply PutAppendReply
-			ok := common.Call(srv, "KVPaxos.PutAppend", &args, &reply)
-			if ok && reply.Err == OK {
-				return
-			}
+		ok := common.Call(ck.servers[idx], "KVPaxos.PutAppend", &args, &reply)
+		if ok && reply.Err == OK {
+			break
 		}
-		time.Sleep(100 * time.Millisecond)
+		idx = (idx + 1) % len(ck.servers)
 	}
 }
 
-func (ci *ClerkImpl) createOpID() int64 {
-	ci.opID++
-	return ci.clientID + ci.opID
-}
+// func (ci *ClerkImpl) createOpID() int64 {
+// 	ci.opID++
+// 	return ci.clientID + ci.opID
+// }

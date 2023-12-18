@@ -6,7 +6,7 @@ package kvpaxos
 // otherwise RPC will break.
 //
 type PutAppendArgsImpl struct {
-	ID int64
+	ID  int64
 	Seq int
 }
 
@@ -14,7 +14,7 @@ type PutAppendArgsImpl struct {
 // additional state to include in arguments to Get RPC.
 //
 type GetArgsImpl struct {
-	ID int64
+	ID  int64
 	Seq int
 }
 

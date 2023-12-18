@@ -74,6 +74,19 @@ func waitn(t *testing.T, pxa []*Paxos, seq int, wanted int, wantedvals ...interf
 			to *= 2
 		}
 	}
+
+	// print out all the paxos servers that ARE decided
+	// for i := 0; i < len(pxa); i++ {
+	// 	if pxa[i] != nil {
+	// 		decided, v1 := pxa[i].Status(seq)
+	// 		if decided == Decided {
+	// 			fmt.Printf("server %v decided with value %v\n", i, v1)
+	// 		} else {
+	// 			fmt.Printf("server %v not decided with value %v\n", i, v1)
+	// 		}
+	// 	}
+	// }
+
 	nd := ndecided(t, pxa, seq, wantedvals...)
 	if nd < wanted {
 		t.Fatalf("too few decided; seq=%v ndecided=%v wanted=%v", seq, nd, wanted)
@@ -746,7 +759,7 @@ func TestPartition(t *testing.T) {
 
 	fmt.Printf("Test: All agree after full heal ...\n")
 
-	pxa[0].Start(seq, 1000) // poke them
+	pxa[0].Start(seq, 1000) // 0 and 4 find out from the previous majority partition nodes the decided value 111
 	pxa[4].Start(seq, 1004)
 	part(t, tag, npaxos, []int{0, 1, 2, 3, 4}, []int{}, []int{})
 
@@ -762,10 +775,14 @@ func TestPartition(t *testing.T) {
 		part(t, tag, npaxos, []int{0, 1, 2}, []int{3, 4}, []int{})
 		pxa[0].Start(seq, seq*10)
 		pxa[3].Start(seq, (seq*10)+1)
+		//fmt.Printf("Checkpoint 1\n")
+
 		waitmajority(t, pxa, seq, seq*10)
 		if ndecided(t, pxa, seq, seq*10) > 3 {
 			t.Fatalf("too many decided")
 		}
+
+		//fmt.Printf("Checkpoint 2\n")
 
 		part(t, tag, npaxos, []int{0, 1}, []int{2, 3, 4}, []int{})
 		waitn(t, pxa, seq, npaxos, seq*10)

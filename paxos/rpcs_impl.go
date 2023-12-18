@@ -1,10 +1,6 @@
 package paxos
 
 import (
-
-	// "time"
-	// "strconv"
-
 	"usc.edu/csci499/proj3/common"
 )
 
@@ -81,8 +77,11 @@ func (px *Paxos) sendPrepare(seq int, n int, v interface{}) error {
 	// thisInstance.PrepareOK = false
 	// thisInstance.PrepareOKCount = 0
 
-	//Printf("[%d]: majority is %d \n", px.me, px.impl.majority)
+	//fmt.Printf("[%d, sendPrepare]: sequence %d with value %d \n", px.me, seq, v)
 
+	//fmt.Printf("[%d, sendPrepare]: peer list %v\n", px.me, px.peers)
+
+	//for every peer, send prepare RPC
 	for _, peer := range px.peers {
 
 		args := &PrepareArgs{
@@ -101,30 +100,46 @@ func (px *Paxos) sendPrepare(seq int, n int, v interface{}) error {
 			if reply.Prepared {
 				okCount++
 			} else if reply.Err == "Instance decided" {
-				thisInstance.va = reply.AcceptedValue
-				thisInstance.Decided = true
-				thisInstance.PrepareOK = true
-				return nil
+
+				if reply.HighestAcceptedProposalID > thisInstance.np {
+					thisInstance.np = reply.HighestAcceptedProposalID
+					n = reply.HighestAcceptedProposalID
+				}
+
+				if v != reply.AcceptedValue {
+					thisInstance.va = reply.AcceptedValue
+					v = reply.AcceptedValue
+					break
+				}
+				//thisInstance.Decided = true
+				//thisInstance.PrepareOK = true
+				okCount++
+				//return nil
 			}
 		} else if common.Call(peer, "Paxos.Prepare", args, reply) {
 			if reply.Prepared {
 				okCount++
 			} else if reply.Err == "Instance decided" {
-				thisInstance.va = reply.AcceptedValue
-				thisInstance.Decided = true
-				thisInstance.PrepareOK = true
-				return nil
-			} else if reply.AcceptedValue != nil {
-				thisInstance.va = reply.AcceptedValue
-				thisInstance.na = reply.HighestAcceptedProposalID
-				thisInstance.PrepareOK = true
-				return nil
+				if reply.HighestAcceptedProposalID > thisInstance.np {
+					thisInstance.np = reply.HighestAcceptedProposalID
+					n = reply.HighestAcceptedProposalID
+				}
+
+				if v != reply.AcceptedValue {
+					thisInstance.va = reply.AcceptedValue
+					v = reply.AcceptedValue
+					break
+				}
+				//thisInstance.Decided = true
+				//thisInstance.PrepareOK = true
+				okCount++
+				//return nil
 			}
 		}
 	} // END FOR
 
 	if okCount >= px.impl.majority {
-		//Printf("[%d]: majority of prepares accepted\n", px.me)
+		//fmt.Printf("[%d, sendPrepare]: majority of prepares accepted\n", px.me)
 		thisInstance.PrepareOKCount = okCount
 		thisInstance.PrepareOK = true
 	}
@@ -194,7 +209,7 @@ func (px *Paxos) Prepare(args *PrepareArgs, reply *PrepareReply) error {
 
 	//if n > n_p
 	//print n and n_p
-	//Printf("[%d]: prepare called sequence %d N %d and NP %d \n", px.me, args.Sequence, args.N, thisInstance.np)
+	//fmt.Printf("[%d, prepare]: prepare called sequence %d N %d and NP %d \n", px.me, args.Sequence, args.N, thisInstance.np)
 	if args.N >= thisInstance.np {
 
 		//n_p = n
@@ -204,10 +219,10 @@ func (px *Paxos) Prepare(args *PrepareArgs, reply *PrepareReply) error {
 		reply.HighestAcceptedProposalID = thisInstance.na
 		reply.AcceptedValue = thisInstance.va
 		reply.Err = OK
-		//Printf("[%d]: prepare accepted\n", px.me)
+		//fmt.Printf("[%d, prepare]: prepare accepted\n", px.me)
 	} else {
 		//reply prepare_reject
-		//Printf("[%d]: prepare rejected\n", px.me)
+		//fmt.Printf("[%d, prepare]: prepare rejected\n", px.me)
 		reply.Prepared = false
 	}
 
@@ -240,19 +255,37 @@ func (px *Paxos) sendAccept(seq int, n int, v interface{}) error {
 			px.Accept(args, reply)
 			if reply.Accepted {
 				okCount++
+			} else if reply.Err == "Instance decided" {
+				//if we learn from a peer that a decision is already reached among some majority partition
+				if v != reply.AcceptedValue {
+					thisInstance.va = reply.AcceptedValue
+					v = reply.AcceptedValue
+					break
+				}
+				//thisInstance.Decided = true
+				//thisInstance.AcceptOK = true
+				thisInstance.na = reply.HighestAcceptedProposalID
+				//n = reply.HighestAcceptedProposalID
+				okCount++
+				//return nil
 			}
 		} else if common.Call(peer, "Paxos.Accept", args, reply) {
 			if reply.Accepted {
 				okCount++
+			} else if reply.Err == "Instance decided" {
+				//if we learn from a peer that a decision is already reached among some majority partition
+				if v != reply.AcceptedValue {
+					thisInstance.va = reply.AcceptedValue
+					v = reply.AcceptedValue
+					break
+				}
+				//thisInstance.Decided = true
+				//thisInstance.AcceptOK = true
+				thisInstance.na = reply.HighestAcceptedProposalID
+				//n = reply.HighestAcceptedProposalID
+				okCount++
+				//return nil
 			}
-			// else if reply.Err == "Instance decided" {
-			// 	thisInstance.va = reply.AcceptedValue
-			// 	thisInstance.Decided = true
-			// 	thisInstance.PrepareOK = true
-			// 	thisInstance.AcceptOK = true
-			// 	thisInstance.na = reply.HighestAcceptedProposalID
-			// 	return nil
-			// }
 		}
 	}
 
@@ -281,7 +314,7 @@ func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) error {
 	px.mu.Lock()
 	defer px.mu.Unlock()
 
-	//Printf("[%d]: accept called sequence %d ID %d \n", px.me, args.Sequence, args.N)
+	//fmt.Printf("[%d, accept]: accept called sequence %d N %d and value %d\n", px.me, args.Sequence, args.N, args.Value)
 
 	//first check if instance exists
 	_, exists := px.impl.instances[args.Sequence]
@@ -306,6 +339,7 @@ func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) error {
 	thisInstance := px.impl.instances[args.Sequence]
 
 	if thisInstance.Decided {
+		//fmt.Printf("[%d, accept]: accept already decided with value %d \n", px.me, thisInstance.va)
 		reply.Accepted = false
 		reply.Err = "Instance decided"
 		reply.AcceptedValue = thisInstance.va
@@ -321,10 +355,10 @@ func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) error {
 		reply.Accepted = true
 		reply.HighestAcceptedProposalID = args.N
 		reply.Err = OK
-		//Printf("[%d]: accept accepted\n", px.me)
+		//fmt.Printf("[%d, accept]: accept accepted with value %d \n", px.me, thisInstance.va)
 
 	} else {
-		//Printf("[%d]: accept rejected\n", px.me)
+		//fmt.Printf("[%d, accept]: accept rejected\n", px.me)
 		// duration := 5 * time.Minute
 		// time.Sleep(duration)
 		reply.Accepted = false
@@ -405,17 +439,17 @@ func (px *Paxos) Decide(args *DecidedArgs, reply *DecidedReply) error {
 	thisInstance := px.impl.instances[args.Sequence]
 
 	// print the instances map
-	//Printf("[%d]: instances map: %v\n", px.me, px.impl.instances)
-	//Printf("[%d]: args.Sequence: %v\n", px.me, args.Sequence)
+	//fmt.Printf("[%d, decide]: instances map: %v\n", px.me, px.impl.instances)
+	//fmt.Printf("[%d, decide]: args.Sequence: %v\n", px.me, args.Sequence)
 
 	thisInstance.Decided = true
 	thisInstance.va = args.Value
 
 	reply.Err = OK
 
-	//Printf("[%d]: Decide called\n", px.me)
-	//Printf("[%d]: Decided: %v\n", px.me, thisInstance.Decided)
-	//Printf("[%d]: va: %v\n", px.me, thisInstance.va)
+	//fmt.Printf("[%d, decide]: Decide called\n", px.me)
+	//fmt.Printf("[%d, decide]: Decided: %v\n", px.me, thisInstance.Decided)
+	//fmt.Printf("[%d, decide]: va: %v\n", px.me, thisInstance.va)
 	return nil
 }
 
