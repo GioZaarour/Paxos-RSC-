@@ -76,7 +76,7 @@ func StartServer(servers []string, me int) *KVPaxos {
 	rpcs.Register(kv)
 
 	px := paxos.Make(servers, me, rpcs)
-	kv.rsm = paxosrsm.MakeRSM(me, px, kv.ApplyOp)
+	kv.rsm = paxosrsm.MakeRSM(me, px)
 
 	kv.InitImpl()
 
